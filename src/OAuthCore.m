@@ -27,8 +27,11 @@ static NSData *HMAC_SHA1(NSString *data, NSString *key) {
 	return [NSData dataWithBytes:buf length:CC_SHA1_DIGEST_LENGTH];
 }
 
-NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSString *_oAuthConsumerKey, NSString *_oAuthConsumerSecret, NSString *_oAuthToken, NSString *_oAuthTokenSecret)
-{
+NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSString *_oAuthConsumerKey, NSString *_oAuthConsumerSecret, NSString *_oAuthToken, NSString *_oAuthTokenSecret) {
+	return OAuthorizationHeaderWithCallback(url, method, body, _oAuthConsumerKey, _oAuthConsumerSecret, _oAuthToken, _oAuthTokenSecret, nil);
+}
+
+NSString *OAuthorizationHeaderWithCallback(NSURL *url, NSString *method, NSData *body, NSString *_oAuthConsumerKey, NSString *_oAuthConsumerSecret, NSString *_oAuthToken, NSString *_oAuthTokenSecret, NSString *_oAuthCallback) {
 	NSString *_oAuthNonce = [NSString ab_GUID];
 	NSString *_oAuthTimestamp = [NSString stringWithFormat:@"%d", (int)[[NSDate date] timeIntervalSince1970]];
 	NSString *_oAuthSignatureMethod = @"HMAC-SHA1";
@@ -42,7 +45,9 @@ NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSStr
 	[oAuthAuthorizationParameters setObject:_oAuthConsumerKey forKey:@"oauth_consumer_key"];
 	if(_oAuthToken)
 		[oAuthAuthorizationParameters setObject:_oAuthToken forKey:@"oauth_token"];
-	
+	if (_oAuthCallback)
+		[oAuthAuthorizationParameters setObject:_oAuthCallback forKey:@"oauth_callback"];
+
 	// get query and body parameters
 	NSDictionary *additionalQueryParameters = [NSURL ab_parseURLQueryString:[url query]];
 	NSDictionary *additionalBodyParameters = nil;
@@ -74,11 +79,11 @@ NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSStr
 	NSString *normalizedParameterString = [parameterArray componentsJoinedByString:@"&"];
 	
 	NSString *normalizedURLString;
-    if ([url port] == nil) {
-        normalizedURLString = [NSString stringWithFormat:@"%@://%@%@", [url scheme], [url host], [url path]];
-    } else {
-        normalizedURLString = [NSString stringWithFormat:@"%@://%@:%@%@", [url scheme], [url host], [url port], [url path]];
-    }
+	if([url port] == nil) {
+		normalizedURLString = [NSString stringWithFormat:@"%@://%@%@", [url scheme], [url host], [url ab_actualPath]];
+	} else {
+		normalizedURLString = [NSString stringWithFormat:@"%@://%@:%@%@", [url scheme], [url host], [url port], [url ab_actualPath]];
+	}
 	
 	NSString *signatureBaseString = [NSString stringWithFormat:@"%@&%@&%@",
 									 [method ab_RFC3986EncodedString],
@@ -87,7 +92,7 @@ NSString *OAuthorizationHeader(NSURL *url, NSString *method, NSData *body, NSStr
 	
 	NSString *key = [NSString stringWithFormat:@"%@&%@",
 					 [_oAuthConsumerSecret ab_RFC3986EncodedString],
-					 [_oAuthTokenSecret ab_RFC3986EncodedString]];
+					 [_oAuthTokenSecret ab_RFC3986EncodedString] ?: @""];
 	
 	NSData *signature = HMAC_SHA1(signatureBaseString, key);
 	NSString *base64Signature = [signature base64EncodedString];
